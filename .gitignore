@@ -1,0 +1,10 @@
+# Android Studio / IntelliJ IDEA Ayarları
+.idea/
+.gradle/
+*.iml
+local.properties
+
+# Build Çıktıları
+/build
+/app/build
+*.apk
