@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.simpledownloader.data.local.entity.DownloadEntity
 import com.example.simpledownloader.utils.FileHelper
@@ -56,7 +57,7 @@ fun HistoryItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(120.dp)
+            .height(96.dp)
     ) {
         // Delete button background (revealed on swipe) - Purple theme
         Box(
@@ -75,7 +76,7 @@ fun HistoryItem(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Sil",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(24.dp)
                 )
                 Text(
                     text = "Sil",
@@ -119,7 +120,7 @@ fun HistoryItem(
                         }
                     )
                 },
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             ),
@@ -129,8 +130,8 @@ fun HistoryItem(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Thumbnail
                 if (!download.thumbnailUrl.isNullOrBlank()) {
@@ -138,18 +139,18 @@ fun HistoryItem(
                         model = download.thumbnailUrl,
                         contentDescription = "Video thumbnail",
                         modifier = Modifier
-                            .width(120.dp)
+                            .width(80.dp)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(12.dp)),
+                            .clip(RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.Crop
                     )
                 } else {
                     // Placeholder when no thumbnail
                     Surface(
                         modifier = Modifier
-                            .width(120.dp)
+                            .width(80.dp)
                             .fillMaxHeight(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -157,7 +158,7 @@ fun HistoryItem(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(32.dp)
                             )
                         }
                     }
@@ -172,11 +173,11 @@ fun HistoryItem(
                 ) {
                     // Title and platform
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
                             text = download.title,
-                            style = MaterialTheme.typography.bodyLarge.copy(
+                            style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.SemiBold
                             ),
                             maxLines = 2,
@@ -186,7 +187,7 @@ fun HistoryItem(
                         
                         // Platform badge
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = RoundedCornerShape(4.dp),
                             color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Text(
@@ -195,14 +196,14 @@ fun HistoryItem(
                                     fontWeight = FontWeight.Bold
                                 ),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     }
                     
                     // Bottom info row
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         // Uploader if available
                         if (!download.uploader.isNullOrBlank()) {
@@ -213,12 +214,14 @@ fun HistoryItem(
                                 Surface(
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.secondaryContainer,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(14.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Text(
                                             text = download.uploader.first().uppercaseChar().toString(),
-                                            style = MaterialTheme.typography.labelSmall,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 9.sp
+                                            ),
                                             color = MaterialTheme.colorScheme.onSecondaryContainer
                                         )
                                     }
@@ -236,7 +239,7 @@ fun HistoryItem(
                         
                         // Stats row (size, duration, date)
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // File size
@@ -282,13 +285,13 @@ fun HistoryItem(
                 // Folder button - Purple theme
                 IconButton(
                     onClick = onOpenFolderClick,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Folder,
                         contentDescription = "Klasörü Aç",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }

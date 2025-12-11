@@ -149,60 +149,136 @@ object FileHelper {
      */
     fun openFileLocation(context: android.content.Context, filePath: String) {
         try {
-            val file = java.io.File(filePath)
-            if (!file.exists()) {
-                android.widget.Toast.makeText(
-                    context,
-                    "Dosya bulunamadı",
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
-                return
+            var targetFile: java.io.File? = null
+            
+            // Check if it's a content URI (modern Android storage)
+            if (filePath.startsWith("content://")) {
+                try {
+                    val uri = android.net.Uri.parse(filePath)
+                    // Try to resolve real path from URI
+                    val projection = arrayOf(android.provider.MediaStore.MediaColumns.DATA)
+                    context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val columnIndex = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DATA)
+                            val realPath = cursor.getString(columnIndex)
+                            if (realPath != null) {
+                                targetFile = java.io.File(realPath)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    timber.log.Timber.w(e, "Could not resolve real path from URI: $filePath")
+                }
+            } else {
+                targetFile = java.io.File(filePath)
             }
             
-            val parentFile = file.parentFile
-            if (parentFile != null && parentFile.exists()) {
-                // Try to open file manager showing the folder
-                try {
-                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                        setDataAndType(
-                            androidx.core.content.FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.fileprovider",
-                                parentFile
-                            ),
-                            "resource/folder"
-                        )
-                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    // Fallback: Try to open with DocumentsUI
-                    try {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                            setDataAndType(
-                                android.net.Uri.fromFile(parentFile),
-                                "*/*"
-                            )
-                        }
-                        context.startActivity(intent)
-                    } catch (e2: Exception) {
-                        // Final fallback: Show toast with path
-                        android.widget.Toast.makeText(
-                            context,
-                            "Klasör: ${parentFile.absolutePath}",
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-                        timber.log.Timber.w("Could not open folder, showing toast instead")
-                    }
+            // If we have a target file and it exists, open its parent
+            if (targetFile != null && targetFile!!.exists()) {
+                val parentFile = targetFile!!.parentFile
+                if (parentFile != null && parentFile.exists()) {
+                    openFolderIntent(context, parentFile)
+                    return
                 }
             }
+            
+            // Fallback: If we couldn't resolve the file or it doesn't exist via File API
+            // (common in Android 10+ scoped storage), try to open the default download folder
+            // which is Movies/SimpleDownloader based on our repository logic
+            
+            val defaultFolder = java.io.File(
+                android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES),
+                "SimpleDownloader"
+            )
+            
+            if (defaultFolder.exists()) {
+                 openFolderIntent(context, defaultFolder)
+            } else {
+                // If even valid folder doesn't exist, last resort: Open generic Downloads
+                openGenericDownloads(context)
+            }
+            
         } catch (e: Exception) {
             timber.log.Timber.e(e, "Error opening file location")
             android.widget.Toast.makeText(
                 context,
                 "Klasör açılamadı: ${e.message}",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+    
+    private fun openFolderIntent(context: android.content.Context, folder: java.io.File) {
+        try {
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                setDataAndType(
+                    androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        folder
+                    ),
+                    "resource/folder"
+                )
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            // Fallback: Try to open with DocumentsUI
+            try {
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                    setDataAndType(
+                        android.net.Uri.fromFile(folder),
+                        "*/*"
+                    )
+                }
+                context.startActivity(intent)
+            } catch (e2: Exception) {
+                 // Try opening specific folder via SAF URI construction
+                 // This covers /storage/emulated/0/Movies/SimpleDownloader mapping to primary:Movies/SimpleDownloader
+                 try {
+                     val path = folder.absolutePath
+                     val relativePath = path.substringAfter("/storage/emulated/0/")
+                     val encodedPath = android.net.Uri.encode(relativePath).replace("/", "%2F")
+                     val uriString = "content://com.android.externalstorage.documents/document/primary:$encodedPath"
+                     
+                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                        setDataAndType(
+                            android.net.Uri.parse(uriString),
+                            "vnd.android.document/directory"
+                        )
+                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or 
+                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    }
+                    context.startActivity(intent)
+                 } catch(e3: Exception) {
+                    // Final fallback: Show toast with path
+                    android.widget.Toast.makeText(
+                        context,
+                        "Klasör: ${folder.absolutePath}",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                 }
+            }
+        }
+    }
+    
+    private fun openGenericDownloads(context: android.content.Context) {
+        try {
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(
+                    android.net.Uri.parse("content://com.android.externalstorage.documents/document/primary:Download"),
+                    "vnd.android.document/directory"
+                )
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or 
+                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+             android.widget.Toast.makeText(
+                context,
+                "Klasör açılamadı",
                 android.widget.Toast.LENGTH_SHORT
             ).show()
         }
