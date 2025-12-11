@@ -24,9 +24,9 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:extractNativeLibs="true"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/app_icon_bilge_adam"
         android:label="Simple Downloader"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@drawable/app_icon_bilge_adam"
         android:supportsRtl="true"
         android:theme="@style/Theme.SimpleDownloader"
         android:usesCleartextTraffic="true"
@@ -37,7 +37,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="Simple Downloader"
-            android:theme="@style/Theme.SimpleDownloader">
+            android:theme="@style/Theme.App.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -85,7 +85,6 @@ class VideoRepositoryImpl(
                 request.addOption("--skip-download") // Don't download, just get info
                 
                 // Platform-specific options for analysis
-                // Platform-specific options for analysis
                 when {
                     url.contains("youtube.com", ignoreCase = true) || url.contains("youtu.be", ignoreCase = true) -> {
                         Timber.d("Applying YouTube-specific analysis options")
@@ -101,6 +100,18 @@ class VideoRepositoryImpl(
                         request.addOption("--force-ipv4")
                         request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                         request.addOption("--referer", "https://www.instagram.com/")
+                    }
+                    url.contains("tiktok.com", ignoreCase = true) -> {
+                        Timber.d("Applying TikTok-specific analysis options")
+                        request.addOption("--no-check-certificate")
+                        request.addOption("--force-ipv4")
+                        // Use mobile user-agent to avoid impersonation requirement
+                        request.addOption("--user-agent", "Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                        request.addOption("--referer", "https://www.tiktok.com/")
+                        // Add extractor arguments to help with TikTok
+                        request.addOption("--extractor-args", "tiktok:api_hostname=api16-normal-c-useast1a.tiktokv.com")
+                        // Increase timeout for TikTok
+                        request.addOption("--socket-timeout", "30")
                     }
                     else -> {
                         request.addOption("--no-check-certificate")
@@ -150,8 +161,11 @@ class VideoRepositoryImpl(
                     val error = when {
                         e.message?.contains("Unsupported URL", ignoreCase = true) == true ->
                             DownloadError.UnsupportedPlatform(url = url.substringAfter("://").substringBefore("/"))
-                        e.message?.contains("not available", ignoreCase = true) == true ->
+                        e.message?.contains("not available", ignoreCase = true) == true ||
+                        e.message?.contains("status code 0", ignoreCase = true) == true ->
                             DownloadError.VideoUnavailable("Video is not available or private")
+                        e.message?.contains("impersonation", ignoreCase = true) == true ->
+                            DownloadError.VideoUnavailable("This TikTok video cannot be downloaded due to restrictions. Please try another video.")
                         e.message?.contains("IncompleteRead", ignoreCase = true) == true ||
                         e.message?.contains("Unable to download webpage", ignoreCase = true) == true ->
                             DownloadError.NetworkError("Connection failed after $maxRetries attempts. Instagram may be blocking requests. Try again later.")
@@ -263,6 +277,18 @@ class VideoRepositoryImpl(
                         // Use desktop user agent for Instagram to avoid "No csrf token" error
                         request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                         request.addOption("--referer", "https://www.instagram.com/")
+                    }
+                    videoInfo.platform.name.equals("TIKTOK", ignoreCase = true) -> {
+                        Timber.d("Applying TikTok-specific options")
+                        request.addOption("--extractor-retries", "5")
+                        request.addOption("--fragment-retries", "5")
+                        request.addOption("--retry-sleep", "2")
+                        request.addOption("--socket-timeout", "30")
+                        // Use mobile user agent for TikTok to avoid impersonation requirement
+                        request.addOption("--user-agent", "Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                        request.addOption("--referer", "https://www.tiktok.com/")
+                        // Add extractor arguments to help with TikTok
+                        request.addOption("--extractor-args", "tiktok:api_hostname=api16-normal-c-useast1a.tiktokv.com")
                     }
                     else -> {
                         // Use a mobile User-Agent for other platforms
@@ -530,8 +556,11 @@ class VideoRepositoryImpl(
                 val error = when {
                     e.message?.contains("Unsupported URL", ignoreCase = true) == true ->
                         DownloadError.UnsupportedPlatform(url = videoInfo.url.substringAfter("://").substringBefore("/"))
-                    e.message?.contains("not available", ignoreCase = true) == true ->
+                    e.message?.contains("not available", ignoreCase = true) == true ||
+                    e.message?.contains("status code 0", ignoreCase = true) == true ->
                         DownloadError.VideoUnavailable("Video is not available or private")
+                    e.message?.contains("impersonation", ignoreCase = true) == true ->
+                        DownloadError.VideoUnavailable("This TikTok video cannot be downloaded due to restrictions. Please try another video.")
                     e.message?.contains("Unable to download webpage", ignoreCase = true) == true ||
                     e.message?.contains("Remote end closed connection", ignoreCase = true) == true ->
                         DownloadError.NetworkError("Connection failed after $maxRetries attempts. Instagram may be blocking requests. Try again later.")

@@ -182,25 +182,46 @@ fun MainScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Logo / Icon
+                    // Logo / Icon - App Icon
                     Image(
-                        painter = painterResource(id = R.drawable.ic_download_custom),
+                        painter = painterResource(id = R.drawable.app_icon_bilge_adam),
                         contentDescription = null,
                         modifier = Modifier
-                            .size(80.dp)
-                            .clip(RoundedCornerShape(180.dp))
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .shadow(
+                                elevation = 8.dp,
+                                shape = CircleShape,
+                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            )
                     )
                     
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                     
-                    Text(
-                        text = "Downloader",
-                        style = MaterialTheme.typography.displaySmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-1).sp
-                        ),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    // "Simple" in purple, "Downloader" in white - Two lines
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Simple",
+                            style = MaterialTheme.typography.displaySmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.5).sp
+                            ),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        
+                        Text(
+                            text = "Downloader",
+                            style = MaterialTheme.typography.displaySmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.5).sp
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
                         text = "Paste a link to start",

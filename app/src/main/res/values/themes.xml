@@ -2,4 +2,10 @@
 <resources>
 
     <style name="Theme.SimpleDownloader" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/background_dark</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/app_icon_bilge_adam</item>
+        <item name="postSplashScreenTheme">@style/Theme.SimpleDownloader</item>
+    </style>
 </resources>

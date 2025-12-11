@@ -33,6 +33,8 @@ import com.example.simpledownloader.ui.components.CustomFloatingTabBar
 import com.example.simpledownloader.ui.theme.SimpleDownloaderTheme
 import timber.log.Timber
 
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+
 class MainActivity : ComponentActivity() {
     
     // Simple dependency injection (will be replaced with proper DI later)
@@ -42,6 +44,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var historyViewModel: HistoryViewModel
     
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         
         Timber.d("MainActivity created")
