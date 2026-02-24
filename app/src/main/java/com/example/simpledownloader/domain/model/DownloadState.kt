@@ -41,10 +41,10 @@ sealed class DownloadState {
  * Analysis steps shown to the user
  */
 enum class AnalysisStep(val emoji: String, val message: String) {
-    VALIDATING("🔍", "Validating URL..."),
-    FETCHING("📡", "Fetching video metadata..."),
-    ANALYZING("🎬", "Analyzing formats..."),
-    READY("✅", "Ready to download!")
+    VALIDATING("🔍", "URL doğrulanıyor..."),
+    FETCHING("📡", "Video bilgileri alınıyor..."),
+    ANALYZING("🎬", "Format analiz ediliyor..."),
+    READY("✅", "İndirmeye hazır!")
 }
 
 /**
@@ -54,16 +54,18 @@ sealed class DownloadError {
     data class InvalidUrl(val reason: String) : DownloadError()
     data class NetworkError(val message: String) : DownloadError()
     data class StorageError(val message: String) : DownloadError()
-    data class UnsupportedPlatform(val url: String) :DownloadError()
+    data class UnsupportedPlatform(val url: String) : DownloadError()
     data class VideoUnavailable(val reason: String) : DownloadError()
+    data class LoginRequired(val platform: String, val message: String) : DownloadError()
     data class UnknownError(val throwable: Throwable) : DownloadError()
     
     fun getUserMessage(): String = when (this) {
-        is InvalidUrl -> "Invalid URL: $reason"
-        is NetworkError -> "Network error: $message"
-        is StorageError -> "Storage error: $message"
-        is UnsupportedPlatform -> "This platform is not supported yet"
-        is VideoUnavailable -> "Video unavailable: $reason"
-        is UnknownError -> "An unknown error occurred: ${throwable.message}"
+        is InvalidUrl -> "Geçersiz URL: $reason"
+        is NetworkError -> message
+        is StorageError -> message
+        is UnsupportedPlatform -> "Bu platform henüz desteklenmiyor"
+        is VideoUnavailable -> reason
+        is LoginRequired -> "$message\n\n💡 Sağ üstteki ⚙️ Ayarlar butonundan $platform hesabınızla giriş yapın."
+        is UnknownError -> "Beklenmeyen bir hata oluştu: ${throwable.message}"
     }
 }

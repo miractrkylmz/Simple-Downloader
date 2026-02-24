@@ -2,14 +2,16 @@ package com.example.simpledownloader
 
 import android.app.Application
 import com.example.simpledownloader.BuildConfig
-import com.yausername.youtubedl_android.YoutubeDL
-import com.yausername.youtubedl_android.YoutubeDLException
+import com.example.simpledownloader.utils.YtDlpUpdateManager
 import timber.log.Timber
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class SimpleDownloaderApplication : Application() {
+
+    lateinit var ytDlpUpdateManager: YtDlpUpdateManager
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -19,25 +21,24 @@ class SimpleDownloaderApplication : Application() {
             Timber.plant(Timber.DebugTree())
         }
 
-        // Initialize YoutubeDL in background
+        // Initialize YtDlpUpdateManager
+        ytDlpUpdateManager = YtDlpUpdateManager.getInstance(this)
+
+        // Initialize YoutubeDL and check for updates in background
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                YoutubeDL.getInstance().init(applicationContext)
-                val currentVersion = YoutubeDL.getInstance().version(applicationContext)
-                Timber.d("YoutubeDL initialized. Version: $currentVersion")
+                ytDlpUpdateManager.initialize()
+                Timber.d("YtDlpUpdateManager initialized with version: ${ytDlpUpdateManager.currentVersion.value}")
                 
-                // Update yt-dlp binary to latest version
-                try {
-                    val updateStatus = YoutubeDL.getInstance().updateYoutubeDL(applicationContext)
-                    val newVersion = YoutubeDL.getInstance().version(applicationContext)
-                    Timber.d("YoutubeDL update status: $updateStatus. New Version: $newVersion")
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to update YoutubeDL")
+                // Check for updates in background
+                val wasUpdated = ytDlpUpdateManager.checkAndUpdate()
+                if (wasUpdated) {
+                    Timber.d("yt-dlp was updated to: ${ytDlpUpdateManager.currentVersion.value}")
+                } else {
+                    Timber.d("yt-dlp is already up to date: ${ytDlpUpdateManager.currentVersion.value}")
                 }
-            } catch (e: YoutubeDLException) {
-                Timber.e(e, "Failed to initialize YoutubeDL")
             } catch (e: Exception) {
-                Timber.e(e, "Unknown error initializing YoutubeDL")
+                Timber.e(e, "Failed to initialize or update YoutubeDL")
             }
         }
     }

@@ -57,7 +57,7 @@ class VideoRepositoryImpl(
         
         // Validate URL
         if (url.isBlank()) {
-            emit(DownloadState.Failed(DownloadError.InvalidUrl("URL cannot be empty")))
+            emit(DownloadState.Failed(DownloadError.InvalidUrl("URL boş olamaz")))
             return@flow
         }
         
@@ -102,16 +102,26 @@ class VideoRepositoryImpl(
                         request.addOption("--referer", "https://www.instagram.com/")
                     }
                     url.contains("tiktok.com", ignoreCase = true) -> {
-                        Timber.d("Applying TikTok-specific analysis options")
+                        Timber.d("Applying TikTok-specific analysis options (NO LOGIN MODE)")
+                        // Fake Chrome Browser Identity
+                        request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+                        
+                        // Fake Headers to look like a real user
+                        request.addOption("--referer", "https://www.tiktok.com/")
+                        request.addOption("--add-header", "Accept-Language:en-US,en;q=0.9")
+                        request.addOption("--add-header", "Sec-Ch-Ua:\"Not A(Brand\";v=\"99\", \"Google Chrome\";v=\"121\", \"Chromium\";v=\"121\"")
+                        request.addOption("--add-header", "Sec-Ch-Ua-Mobile:?0")
+                        request.addOption("--add-header", "Sec-Ch-Ua-Platform:\"Windows\"")
+                        request.addOption("--add-header", "Sec-Fetch-Dest:document")
+                        request.addOption("--add-header", "Sec-Fetch-Mode:navigate")
+                        request.addOption("--add-header", "Sec-Fetch-Site:none")
+                        request.addOption("--add-header", "Sec-Fetch-User:?1")
+                        request.addOption("--add-header", "Upgrade-Insecure-Requests:1")
+
                         request.addOption("--no-check-certificate")
                         request.addOption("--force-ipv4")
-                        // Use mobile user-agent to avoid impersonation requirement
-                        request.addOption("--user-agent", "Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
-                        request.addOption("--referer", "https://www.tiktok.com/")
-                        // Add extractor arguments to help with TikTok
-                        request.addOption("--extractor-args", "tiktok:api_hostname=api16-normal-c-useast1a.tiktokv.com")
-                        // Increase timeout for TikTok
-                        request.addOption("--socket-timeout", "30")
+                        
+                        // Cookies are no longer needed with the No-Login Workaround
                     }
                     else -> {
                         request.addOption("--no-check-certificate")
@@ -158,19 +168,54 @@ class VideoRepositoryImpl(
                 } else {
                     // Not a network error or max retries reached
                     Timber.e(e, "YoutubeDL error analyzing URL: $url")
+                    // Detect platform for login-required errors (only TikTok supports in-app login)
+                    val platform = when {
+                        url.contains("tiktok.com", ignoreCase = true) -> "TikTok"
+                        else -> null
+                    }
+                    
+                    // Check if cookies exist for TikTok (Cleaned up: No longer needed)
+                    // val cookieFile = java.io.File(context.filesDir, "cookies.txt")
+                    // val hasCookies = platform == "TikTok" && cookieFile.exists() && 
+                    //    cookieFile.readText().contains(".tiktok.com")
+                    
                     val error = when {
                         e.message?.contains("Unsupported URL", ignoreCase = true) == true ->
                             DownloadError.UnsupportedPlatform(url = url.substringAfter("://").substringBefore("/"))
+                        
+                        (e.message?.contains("login", ignoreCase = true) == true ||
+                         e.message?.contains("sign in", ignoreCase = true) == true ||
+                         e.message?.contains("authentication", ignoreCase = true) == true) && platform != null ->
+                            // NO LOGIN MODE: Never ask for login, just say unavailable
+                            DownloadError.VideoUnavailable("Bu video indirilmeye uygun değil veya gizli.")
+                        
+                        // Private video errors
+                        e.message?.contains("private", ignoreCase = true) == true && platform != null ->
+                            DownloadError.VideoUnavailable("Bu video gizli ve erişiminiz yok.")
+                        
+                        // Video not available
                         e.message?.contains("not available", ignoreCase = true) == true ||
                         e.message?.contains("status code 0", ignoreCase = true) == true ->
-                            DownloadError.VideoUnavailable("Video is not available or private")
-                        e.message?.contains("impersonation", ignoreCase = true) == true ->
-                            DownloadError.VideoUnavailable("This TikTok video cannot be downloaded due to restrictions. Please try another video.")
+                            DownloadError.VideoUnavailable("Video mevcut değil veya silinmiş.")
+                        
+                        // TikTok specific errors - Downgrade to generic error to avoid blocking user
+                        e.message?.contains("impersonation", ignoreCase = true) == true && platform == "TikTok" ->
+                            DownloadError.VideoUnavailable("Bu video şu anda indirilemiyor. Lütfen daha sonra tekrar deneyin.")
+                        
+                        // Geo-restriction errors
+                        e.message?.contains("geo", ignoreCase = true) == true ||
+                        e.message?.contains("country", ignoreCase = true) == true ->
+                            DownloadError.VideoUnavailable("Bu video bölgenizde mevcut değil.")
+                        
+                        // Network errors
                         e.message?.contains("IncompleteRead", ignoreCase = true) == true ||
                         e.message?.contains("Unable to download webpage", ignoreCase = true) == true ->
-                            DownloadError.NetworkError("Connection failed after $maxRetries attempts. Instagram may be blocking requests. Try again later.")
-                        e.message?.contains("network", ignoreCase = true) == true ->
-                            DownloadError.NetworkError("Network error occurred")
+                            DownloadError.NetworkError("Bağlantı $maxRetries denemeden sonra başarısız oldu. Lütfen daha sonra tekrar deneyin.")
+                        
+                        e.message?.contains("network", ignoreCase = true) == true ||
+                        e.message?.contains("connection", ignoreCase = true) == true ->
+                            DownloadError.NetworkError("Ağ bağlantısı hatası. İnternet bağlantınızı kontrol edin.")
+                        
                         else -> DownloadError.UnknownError(e)
                     }
                     emit(DownloadState.Failed(error))
@@ -193,7 +238,7 @@ class VideoRepositoryImpl(
         // If we reach here, all retries failed
         if (lastException != null) {
             Timber.e(lastException, "Analysis failed after all retries")
-            emit(DownloadState.Failed(DownloadError.NetworkError("Analysis failed after $maxRetries attempts. Please try again.")))
+            emit(DownloadState.Failed(DownloadError.NetworkError("Video analizi $maxRetries denemeden sonra başarısız oldu. Lütfen tekrar deneyin.")))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -279,16 +324,28 @@ class VideoRepositoryImpl(
                         request.addOption("--referer", "https://www.instagram.com/")
                     }
                     videoInfo.platform.name.equals("TIKTOK", ignoreCase = true) -> {
-                        Timber.d("Applying TikTok-specific options")
+                        Timber.d("Applying TikTok-specific options (NO LOGIN MODE)")
+                        // Fake Chrome Browser Identity
+                        request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+                        
+                        // Fake Headers to look like a real user
+                        request.addOption("--referer", "https://www.tiktok.com/")
+                        request.addOption("--add-header", "Accept-Language:en-US,en;q=0.9")
+                        request.addOption("--add-header", "Sec-Ch-Ua:\"Not A(Brand\";v=\"99\", \"Google Chrome\";v=\"121\", \"Chromium\";v=\"121\"")
+                        request.addOption("--add-header", "Sec-Ch-Ua-Mobile:?0")
+                        request.addOption("--add-header", "Sec-Ch-Ua-Platform:\"Windows\"")
+                        request.addOption("--add-header", "Sec-Fetch-Dest:document")
+                        request.addOption("--add-header", "Sec-Fetch-Mode:navigate")
+                        request.addOption("--add-header", "Sec-Fetch-Site:none")
+                        request.addOption("--add-header", "Sec-Fetch-User:?1")
+                        request.addOption("--add-header", "Upgrade-Insecure-Requests:1")
+
                         request.addOption("--extractor-retries", "5")
                         request.addOption("--fragment-retries", "5")
-                        request.addOption("--retry-sleep", "2")
-                        request.addOption("--socket-timeout", "30")
-                        // Use mobile user agent for TikTok to avoid impersonation requirement
-                        request.addOption("--user-agent", "Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
-                        request.addOption("--referer", "https://www.tiktok.com/")
-                        // Add extractor arguments to help with TikTok
-                        request.addOption("--extractor-args", "tiktok:api_hostname=api16-normal-c-useast1a.tiktokv.com")
+                        request.addOption("--retry-sleep", "3")
+                        request.addOption("--socket-timeout", "45")
+
+                        // Cookies are no longer needed
                     }
                     else -> {
                         // Use a mobile User-Agent for other platforms
@@ -443,7 +500,7 @@ class VideoRepositoryImpl(
                 if (uri == null) {
                     tempFile.delete()
                     Timber.e("Failed to create MediaStore entry")
-                    send(DownloadState.Failed(DownloadError.StorageError("Failed to create media file")))
+                    send(DownloadState.Failed(DownloadError.StorageError("Medya dosyası oluşturulamadı. Depolama izinlerini kontrol edin.")))
                     return@channelFlow
                 }
                 
@@ -474,7 +531,7 @@ class VideoRepositoryImpl(
                 } catch (e: Exception) {
                     tempFile.delete()
                     Timber.e(e, "Failed to copy to MediaStore")
-                    send(DownloadState.Failed(DownloadError.StorageError("Failed to save to gallery: ${e.message}")))
+                    send(DownloadState.Failed(DownloadError.StorageError("Galeriye kaydedilemedi: ${e.message}")))
                     return@channelFlow
                 }
             } else {
@@ -509,7 +566,7 @@ class VideoRepositoryImpl(
                 } catch (e: Exception) {
                     tempFile.delete()
                     Timber.e(e, "Failed to copy to public storage")
-                    send(DownloadState.Failed(DownloadError.StorageError("Failed to save: ${e.message}")))
+                    send(DownloadState.Failed(DownloadError.StorageError("Dosya kaydedilemedi: ${e.message}")))
                     return@channelFlow
                 }
             }
@@ -553,17 +610,49 @@ class VideoRepositoryImpl(
             } else {
                 // Not a network error or max retries reached
                 Timber.e(e, "YoutubeDL download failed")
+                // Detect platform for login-required errors (only TikTok supports in-app login)
+                val downloadPlatform = when {
+                    videoInfo.url.contains("tiktok.com", ignoreCase = true) -> "TikTok"
+                    else -> null
+                }
+                
+                // Check if cookies exist for TikTok
+                val dlCookieFile = java.io.File(context.filesDir, "cookies.txt")
+                val dlHasCookies = downloadPlatform == "TikTok" && dlCookieFile.exists() && 
+                    dlCookieFile.readText().contains(".tiktok.com")
+                
                 val error = when {
                     e.message?.contains("Unsupported URL", ignoreCase = true) == true ->
                         DownloadError.UnsupportedPlatform(url = videoInfo.url.substringAfter("://").substringBefore("/"))
+                    
+                    // Login/authentication required
+                    (e.message?.contains("login", ignoreCase = true) == true ||
+                     e.message?.contains("sign in", ignoreCase = true) == true ||
+                     e.message?.contains("authentication", ignoreCase = true) == true) && downloadPlatform != null ->
+                        if (!dlHasCookies) {
+                            DownloadError.LoginRequired(downloadPlatform, "İndirme için $downloadPlatform hesabınızla giriş yapmanız gerekiyor.")
+                        } else {
+                            DownloadError.VideoUnavailable("Video indirilemedi. Cookie'leriniz geçersiz olabilir.")
+                        }
+                    
+                    // Video not available
                     e.message?.contains("not available", ignoreCase = true) == true ||
                     e.message?.contains("status code 0", ignoreCase = true) == true ->
-                        DownloadError.VideoUnavailable("Video is not available or private")
-                    e.message?.contains("impersonation", ignoreCase = true) == true ->
-                        DownloadError.VideoUnavailable("This TikTok video cannot be downloaded due to restrictions. Please try another video.")
+                        DownloadError.VideoUnavailable("Video mevcut değil veya gizli.")
+                    
+                    // TikTok impersonation errors
+                    e.message?.contains("impersonation", ignoreCase = true) == true && downloadPlatform == "TikTok" ->
+                        DownloadError.VideoUnavailable("Bu TikTok videosu kısıtlamalar nedeniyle şu anda indirilemiyor.")
+                    
+                    // Network errors
                     e.message?.contains("Unable to download webpage", ignoreCase = true) == true ||
                     e.message?.contains("Remote end closed connection", ignoreCase = true) == true ->
-                        DownloadError.NetworkError("Connection failed after $maxRetries attempts. Instagram may be blocking requests. Try again later.")
+                        DownloadError.NetworkError("Bağlantı $maxRetries denemeden sonra kesildi. Lütfen daha sonra tekrar deneyin.")
+                    
+                    e.message?.contains("network", ignoreCase = true) == true ||
+                    e.message?.contains("connection", ignoreCase = true) == true ->
+                        DownloadError.NetworkError("Ağ bağlantısı hatası. İnternet bağlantınızı kontrol edin.")
+                    
                     else -> DownloadError.UnknownError(e)
                 }
                 send(DownloadState.Failed(error))
@@ -579,11 +668,13 @@ class VideoRepositoryImpl(
                 Timber.e(e, "Download failed after $maxRetries attempts")
                 val error = when {
                     e.message?.contains("No space left", ignoreCase = true) == true ->
-                        DownloadError.StorageError("Not enough storage space")
+                        DownloadError.StorageError("Yeterli depolama alanı yok. Yer açıp tekrar deneyin.")
                     e.message?.contains("Network", ignoreCase = true) == true ->
-                        DownloadError.NetworkError("Network error after $maxRetries attempts")
+                        DownloadError.NetworkError("$maxRetries denemeden sonra ağ hatası. İnternet bağlantınızı kontrol edin.")
                     e.message?.contains("permission", ignoreCase = true) == true ->
-                        DownloadError.StorageError("Storage permission required")
+                        DownloadError.StorageError("Depolama izni gerekiyor. Ayarlardan izin verin.")
+                    e.message?.contains("File not found", ignoreCase = true) == true ->
+                        DownloadError.StorageError("İndirilen dosya bulunamadı. Lütfen tekrar deneyin.")
                     else -> DownloadError.UnknownError(e)
                 }
                 send(DownloadState.Failed(error))
@@ -595,7 +686,7 @@ class VideoRepositoryImpl(
     // If we reach here, all retries failed
     if (lastException != null) {
         Timber.e(lastException, "Download failed after all retries")
-        send(DownloadState.Failed(DownloadError.NetworkError("Download failed after $maxRetries attempts")))
+        send(DownloadState.Failed(DownloadError.NetworkError("İndirme $maxRetries denemeden sonra başarısız oldu. Lütfen tekrar deneyin.")))
     }
     }.flowOn(Dispatchers.IO)
 

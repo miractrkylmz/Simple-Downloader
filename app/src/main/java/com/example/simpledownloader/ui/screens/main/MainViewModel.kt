@@ -172,7 +172,7 @@ class MainViewModel(
                 }
                 Timber.e(e, "Error analyzing URL")
                 _isAnalyzing.value = false
-                _errorMessage.value = "Failed to analyze URL: ${e.message}"
+                _errorMessage.value = "URL analiz edilemedi: ${e.message}"
             }
         }
     }
@@ -270,18 +270,18 @@ class MainViewModel(
                             _urlInput.value = ""
                             _urlValidationError.value = null
                             // Send one-time event for toast
-                            _uiEvent.send(UiEvent.ShowToast("Download completed! Check History."))
+                            _uiEvent.send(UiEvent.ShowToast("İndirme tamamlandı! Geçmiş sekmesine bakın."))
                         }
                         is DownloadState.Failed -> {
                             Timber.e("Download failed: ${state.error.getUserMessage()}")
-                            _errorMessage.value = "Download failed: ${state.error.getUserMessage()}"
+                            _errorMessage.value = state.error.getUserMessage()
                         }
                         else -> { /* Progress states handled by UI */ }
                     }
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error during download")
-                _errorMessage.value = "Download error: ${e.message}"
+                _errorMessage.value = "İndirme hatası: ${e.message}"
             }
         }
     }

@@ -9,12 +9,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,7 +31,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.simpledownloader.domain.model.DownloadSettings
+// import com.example.simpledownloader.utils.CookieHelper
 import com.example.simpledownloader.utils.PermissionsHelper
+import com.example.simpledownloader.utils.YtDlpUpdateManager
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
@@ -91,6 +98,7 @@ fun CustomSettingsModal(
         Surface(
             modifier = modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.85f) // Max 85% of screen height
                 .padding(horizontal = 16.dp)
                 .clip(RoundedCornerShape(28.dp)),
             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -99,6 +107,7 @@ fun CustomSettingsModal(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
@@ -326,6 +335,22 @@ fun CustomSettingsModal(
                     }
                 }
                 
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+                )
+                
+                // YT-DLP UPDATE SECTION
+                YtDlpUpdateSection()
+                
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+                )
+                
+                // COOKIE MANAGEMENT SECTION REMOVED
+                // CookieManagementSection()
+                
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 // Save button
@@ -426,5 +451,244 @@ private fun getFolderDisplayName(uri: String): String {
         }
     } catch (e: Exception) {
         "Seçili Klasör"
+    }
+}
+
+/**
+ * yt-dlp Update Section for Settings Modal
+ */
+@Composable
+private fun YtDlpUpdateSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val updateManager = remember { YtDlpUpdateManager.getInstance(context) }
+    
+    val updateState by updateManager.updateState.collectAsState()
+    val currentVersion by updateManager.currentVersion.collectAsState()
+    
+    // Track if we should show the notification
+    var showNotification by remember { mutableStateOf(false) }
+    var notificationMessage by remember { mutableStateOf("") }
+    var isError by remember { mutableStateOf(false) }
+    
+    // Show notification when update completes
+    LaunchedEffect(updateState) {
+        when (val state = updateState) {
+            is YtDlpUpdateManager.UpdateState.Success -> {
+                if (!state.wasUpdated) {
+                    notificationMessage = "✓ Zaten son sürümündesiniz: ${state.newVersion}"
+                    isError = false
+                    showNotification = true
+                    // Auto-hide after 3 seconds
+                    kotlinx.coroutines.delay(3000)
+                    showNotification = false
+                }
+            }
+            is YtDlpUpdateManager.UpdateState.Error -> {
+                notificationMessage = state.message
+                isError = true
+                showNotification = true
+                // Auto-hide after 4 seconds for errors
+                kotlinx.coroutines.delay(4000)
+                showNotification = false
+            }
+            else -> {}
+        }
+    }
+    
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Update,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = "yt-dlp Motor Güncelleme",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
+        
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = when (updateState) {
+                is YtDlpUpdateManager.UpdateState.Success -> {
+                    if ((updateState as YtDlpUpdateManager.UpdateState.Success).wasUpdated) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    }
+                }
+                is YtDlpUpdateManager.UpdateState.Error -> 
+                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "yt-dlp Sürümü",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Text(
+                        text = when (updateState) {
+                            is YtDlpUpdateManager.UpdateState.Checking -> "Güncelleme kontrol ediliyor..."
+                            is YtDlpUpdateManager.UpdateState.Updating -> "Güncelleniyor..."
+                            is YtDlpUpdateManager.UpdateState.Success -> {
+                                val state = updateState as YtDlpUpdateManager.UpdateState.Success
+                                if (state.wasUpdated) {
+                                    "Güncellendi! Sürüm: ${state.newVersion}"
+                                } else {
+                                    "Güncel: ${currentVersion ?: "Bilinmiyor"}"
+                                }
+                            }
+                            is YtDlpUpdateManager.UpdateState.Error -> 
+                                (updateState as YtDlpUpdateManager.UpdateState.Error).message
+                            else -> currentVersion ?: "Sürüm bilgisi alınamadı"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when (updateState) {
+                            is YtDlpUpdateManager.UpdateState.Success -> {
+                                if ((updateState as YtDlpUpdateManager.UpdateState.Success).wasUpdated) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                }
+                            }
+                            is YtDlpUpdateManager.UpdateState.Error -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        }
+                    )
+                }
+                
+                val isUpdating = updateState is YtDlpUpdateManager.UpdateState.Checking || 
+                                 updateState is YtDlpUpdateManager.UpdateState.Updating
+                
+                FilledTonalButton(
+                    onClick = {
+                        scope.launch {
+                            updateManager.forceUpdate()
+                        }
+                    },
+                    enabled = !isUpdating,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    if (isUpdating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Güncelleniyor")
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Güncelle")
+                    }
+                }
+            }
+        }
+        
+        Text(
+            text = "TikTok ve Instagram gibi platformlar için güncel yt-dlp gereklidir.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+        
+        // Inline notification card
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showNotification,
+            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = if (isError) {
+                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                },
+                tonalElevation = 2.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = notificationMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isError) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = { showNotification = false },
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Kapat",
+                            tint = if (isError) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+/**
+ * Format file size in human readable format
+ */
+private fun formatFileSize(size: Long): String {
+    return when {
+        size < 1024 -> "$size B"
+        size < 1024 * 1024 -> "${size / 1024} KB"
+        else -> "${size / (1024 * 1024)} MB"
     }
 }
