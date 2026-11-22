@@ -15,6 +15,7 @@ import com.example.simpledownloader.domain.repository.VideoRepository
 import com.example.simpledownloader.utils.DirectImageDownloader
 import com.example.simpledownloader.utils.FileHelper
 import com.example.simpledownloader.utils.PlatformDetector
+import com.example.simpledownloader.utils.TwitterMediaResolver
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLException
 import com.yausername.youtubedl_android.YoutubeDLRequest
@@ -98,6 +99,21 @@ class VideoRepositoryImpl(
                 return@flow
             } catch (e: Exception) {
                 Timber.w(e, "Direct image analysis failed, falling back to general extractor: $trimmedUrl")
+            }
+        }
+
+        // 2. Twitter / X Media Resolution (handles photos, GIFs, and videos cleanly)
+        if (TwitterMediaResolver.isTwitterUrl(trimmedUrl)) {
+            emit(DownloadState.Analyzing(AnalysisStep.FETCHING))
+            try {
+                val tweetMedia = TwitterMediaResolver.resolveTweetMedia(trimmedUrl)
+                if (tweetMedia != null) {
+                    emit(DownloadState.Analyzing(AnalysisStep.ANALYZING))
+                    emit(DownloadState.Ready(tweetMedia))
+                    return@flow
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Twitter media resolver failed, falling back to yt-dlp: $trimmedUrl")
             }
         }
 
@@ -249,10 +265,32 @@ class VideoRepositoryImpl(
         val timestamp = System.currentTimeMillis()
         val sanitizedTitle = FileHelper.sanitizeFilename(videoInfo.title).ifBlank { "Media_$timestamp" }
 
-        // A. Direct Image Download Path
-        if (videoInfo.mediaType == MediaType.IMAGE && (PlatformDetector.isDirectImageUrl(videoInfo.url) || videoInfo.thumbnailUrl?.isNotBlank() == true)) {
-            val downloadUrl = if (PlatformDetector.isDirectImageUrl(videoInfo.url)) videoInfo.url else videoInfo.thumbnailUrl ?: videoInfo.url
-            val tempFile = File(tempDir, "${timestamp}.jpg")
+        // A. Direct Media Download Path (Photos or resolved direct media URLs like Twitter/X)
+        val hasDirectUrl = !videoInfo.directMediaUrl.isNullOrBlank()
+        if (videoInfo.mediaType == MediaType.IMAGE || hasDirectUrl) {
+            val downloadUrl = videoInfo.directMediaUrl
+                ?: if (PlatformDetector.isDirectImageUrl(videoInfo.url)) videoInfo.url
+                else videoInfo.thumbnailUrl ?: videoInfo.url
+
+            val isImage = videoInfo.mediaType == MediaType.IMAGE ||
+                    downloadUrl.contains(".jpg", ignoreCase = true) ||
+                    downloadUrl.contains(".jpeg", ignoreCase = true) ||
+                    downloadUrl.contains(".png", ignoreCase = true) ||
+                    downloadUrl.contains(".webp", ignoreCase = true)
+
+            val ext = if (isImage) {
+                when {
+                    downloadUrl.contains(".png", ignoreCase = true) -> "png"
+                    downloadUrl.contains(".webp", ignoreCase = true) -> "webp"
+                    else -> "jpg"
+                }
+            } else {
+                "mp4"
+            }
+
+            val mimeType = if (isImage) "image/$ext" else "video/mp4"
+            val actualMediaType = if (isImage) MediaType.IMAGE else MediaType.VIDEO
+            val tempFile = File(tempDir, "${timestamp}.${ext}")
 
             try {
                 send(DownloadState.Preparing)
@@ -266,18 +304,22 @@ class VideoRepositoryImpl(
                     ))
                 }
 
-                val finalPath = saveFileToFinalDestination(tempFile, sanitizedTitle, "jpg", "image/jpeg", destinationUri, MediaType.IMAGE)
+                val finalPath = saveFileToFinalDestination(tempFile, sanitizedTitle, ext, mimeType, destinationUri, actualMediaType)
                 val fileSize = if (tempFile.exists()) tempFile.length() else File(finalPath).length()
 
-                saveToDatabase(videoInfo, finalPath, fileSize, MediaType.IMAGE)
+                saveToDatabase(videoInfo, finalPath, fileSize, actualMediaType)
                 send(DownloadState.Completed(filePath = finalPath, fileSize = fileSize))
                 return@channelFlow
 
             } catch (e: Exception) {
-                Timber.e(e, "Direct image download failed")
+                Timber.e(e, "Direct media download failed")
                 if (tempFile.exists()) tempFile.delete()
-                send(DownloadState.Failed(DownloadError.UnknownError(e)))
-                return@channelFlow
+                if (actualMediaType == MediaType.VIDEO) {
+                    Timber.d("Direct video download failed, falling back to yt-dlp")
+                } else {
+                    send(DownloadState.Failed(DownloadError.UnknownError(e)))
+                    return@channelFlow
+                }
             }
         }
 

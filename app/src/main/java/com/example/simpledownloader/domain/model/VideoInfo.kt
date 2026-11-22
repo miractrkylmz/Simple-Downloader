@@ -13,6 +13,7 @@ data class VideoInfo(
     val description: String?,
     val viewCount: Long?,
     val mediaType: MediaType = MediaType.VIDEO,
+    val directMediaUrl: String? = null,
     val availableFormats: List<VideoFormat> = emptyList()
 )
 
