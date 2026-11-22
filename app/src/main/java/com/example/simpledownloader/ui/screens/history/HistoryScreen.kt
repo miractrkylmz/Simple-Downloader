@@ -158,7 +158,7 @@ fun HistoryScreen(
                             HistoryItem(
                                 download = download,
                                 onOpenClick = {
-                                    // Try to open the video file
+                                    // Try to open the downloaded file (video or image)
                                     try {
                                         val path = download.filePath
                                         val uri = if (path.startsWith("content://")) {
@@ -176,16 +176,26 @@ fun HistoryScreen(
                                             )
                                         }
                                         
+                                        val isImage = download.mediaType == "IMAGE" ||
+                                                path.endsWith(".jpg", true) ||
+                                                path.endsWith(".jpeg", true) ||
+                                                path.endsWith(".png", true) ||
+                                                path.endsWith(".webp", true) ||
+                                                path.endsWith(".gif", true)
+                                        
+                                        val mimeType = if (isImage) "image/*" else "video/*"
+                                        val chooserTitle = if (isImage) "Fotoğrafı görüntüle" else "Video ile aç"
+                                        
                                         val intent = Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(uri, "video/*")
+                                            setDataAndType(uri, mimeType)
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                         }
-                                        context.startActivity(Intent.createChooser(intent, "Video ile aç"))
+                                        context.startActivity(Intent.createChooser(intent, chooserTitle))
                                     } catch (e: Exception) {
                                         Toast.makeText(
                                             context,
-                                            "Video açılamadı: ${e.message}",
+                                            "Dosya açılamadı: ${e.message}",
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }

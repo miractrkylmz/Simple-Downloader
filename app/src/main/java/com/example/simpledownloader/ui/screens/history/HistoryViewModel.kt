@@ -90,14 +90,24 @@ class HistoryViewModel(
     fun deleteDownloadFromPhone(download: DownloadEntity) {
         viewModelScope.launch {
             try {
-                // Delete file from phone storage
-                val file = File(download.filePath)
-                if (file.exists()) {
-                    val deleted = file.delete()
-                    if (deleted) {
-                        Timber.d("Deleted file from phone: ${download.filePath}")
-                    } else {
-                        Timber.w("Failed to delete file: ${download.filePath}")
+                // Delete file from phone storage (handles both MediaStore URI and regular File)
+                val path = download.filePath
+                if (path.startsWith("content://")) {
+                    try {
+                        context.contentResolver.delete(android.net.Uri.parse(path), null, null)
+                        Timber.d("Deleted content URI: $path")
+                    } catch (e: Exception) {
+                        Timber.w(e, "Could not delete content URI: $path")
+                    }
+                } else {
+                    val file = File(path)
+                    if (file.exists()) {
+                        val deleted = file.delete()
+                        if (deleted) {
+                            Timber.d("Deleted file from phone: ${download.filePath}")
+                        } else {
+                            Timber.w("Failed to delete file: ${download.filePath}")
+                        }
                     }
                 }
                 

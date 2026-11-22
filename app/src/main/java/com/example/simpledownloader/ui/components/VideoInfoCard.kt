@@ -72,7 +72,7 @@ fun VideoInfoCard(
                         )
                 )
                 
-                // Duration badge in bottom-right corner
+                // Media type / duration badge in bottom-right corner
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -80,8 +80,13 @@ fun VideoInfoCard(
                     shape = RoundedCornerShape(12.dp),
                     color = Color.Black.copy(alpha = 0.7f)
                 ) {
+                    val badgeText = if (videoInfo.mediaType == com.example.simpledownloader.domain.model.MediaType.IMAGE || (videoInfo.duration ?: 0) <= 0) {
+                        "🖼️ Fotoğraf"
+                    } else {
+                        FileHelper.formatDuration(videoInfo.duration ?: 0)
+                    }
                     Text(
-                        text = FileHelper.formatDuration(videoInfo.duration ?: 0),
+                        text = badgeText,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Bold
@@ -120,11 +125,11 @@ fun VideoInfoCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = getPlatformEmoji(videoInfo.platform.name),
+                            text = videoInfo.platform.emoji,
                             fontSize = 16.sp
                         )
                         Text(
-                            text = videoInfo.platform.name,
+                            text = videoInfo.platform.displayName,
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold
                             ),
